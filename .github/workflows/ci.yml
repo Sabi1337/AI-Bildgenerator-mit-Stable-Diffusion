@@ -1,0 +1,40 @@
+name: CI
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Sanity import
+        shell: bash
+        run: |
+          python - <<'PY'
+          import importlib
+          for m in ["flask","requests","PIL","gunicorn"]:
+              importlib.import_module(m if m!="PIL" else "PIL.Image")
+          print("Imports OK")
+          PY
+
+      - name: Run tests
+        run: pytest -q
+
+      - name: Build Docker image
+        run: docker build -t picture-generator:ci .

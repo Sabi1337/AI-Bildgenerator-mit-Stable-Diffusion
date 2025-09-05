@@ -1,0 +1,12 @@
+version: "3.9"
+services:
+  app:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      # Bei SD auf dem Host (Docker Desktop): host.docker.internal
+      SD_API_URL: ${SD_API_URL-http://host.docker.internal:7860}
+    volumes:
+      - ./static/generated_images:/app/static/generated_images
+    restart: unless-stopped

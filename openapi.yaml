@@ -1,0 +1,48 @@
+openapi: 3.0.3
+info:
+  title: Picture Generator API
+  version: "1.0.0"
+servers:
+  - url: http://localhost:5000
+paths:
+  /:
+    get:
+      summary: UI index
+      responses: { '200': { description: HTML page } }
+  /generate_txt2img:
+    post:
+      summary: Generate an image from text prompt
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                prompt: { type: string }
+                "negative-prompt": { type: string }
+                model: { type: string }
+                width: { type: integer, default: 512 }
+                height: { type: integer, default: 512 }
+                steps: { type: integer, default: 30 }
+                sampler: { type: string, default: Euler }
+      responses: { '200': { description: OK } }
+  /generate_img2img:
+    post:
+      summary: Generate from input image + prompt
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                image: { type: string, format: binary }
+                prompt: { type: string }
+                "negative-prompt": { type: string }
+                model: { type: string }
+                width: { type: integer, default: 512 }
+                height: { type: integer, default: 512 }
+                steps: { type: integer, default: 50 }
+                sampler: { type: string, default: Euler }
+      responses: { '200': { description: OK } }
