@@ -21,6 +21,18 @@
     <section class="card">
       <h1 class="card-title">Bild generieren</h1>
 
+      <!-- Hinweis + SD-API-URL Eingabe -->
+      <div class="alert" role="note" style="margin-bottom:12px;">
+        <strong>Hinweis:</strong> Diese Demo benötigt eine laufende
+        <em>Stable Diffusion WebUI (AUTOMATIC1111)</em> mit <code>--api</code>.
+        Eigene SD-API-URL (optional) eintragen:
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <input type="url" id="sd-api-url" placeholder="https://…"
+                 value="{{ sd_api_url or '' }}" style="flex:1;">
+          <button type="button" id="sd-save" class="btn subtle">Übernehmen</button>
+        </div>
+      </div>
+
       <div class="segmented" role="tablist" aria-label="Generation Type">
         <input type="radio" name="genType" id="opt-txt2img" value="txt2img" checked />
         <label for="opt-txt2img" role="tab" aria-controls="panel-txt2img">Text→Bild</label>
@@ -31,6 +43,9 @@
       <div id="error-banner" class="alert alert-error" role="alert" hidden></div>
 
       <form id="generate-form" novalidate>
+        <!-- Hidden-Feld: wird beim Submit mitgeschickt -->
+        <input type="hidden" id="sd-api-url-hidden" name="sd_api_url" value="{{ sd_api_url or '' }}">
+
         <div class="grid">
           <div class="form-group">
             <label for="prompt">Prompt</label>
@@ -44,28 +59,28 @@
         </div>
 
         <div id="img2img-wrap" class="form-group" hidden>
-  <label>Quellbild (für Bild→Bild)</label>
+          <label>Quellbild (für Bild→Bild)</label>
 
-  <div id="dropzone" class="dropzone" tabindex="0"
-       aria-label="Bild hierher ziehen oder klicken, um Datei auszuwählen">
-    <input id="image" name="image" type="file" accept="image/*" hidden />
-    <button type="button" id="clear-image" class="clear-btn" title="Bild entfernen" aria-label="Bild entfernen">
-      <!-- kleines X-Icon -->
-      <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M18.3 5.71L12 12l6.3 6.29-1.41 1.41L10.59 13.41 4.29 19.7 2.88 18.29 9.17 12 2.88 5.71 4.29 4.3 10.59 10.59 16.89 4.3z" fill="currentColor"/>
-      </svg>
-    </button>
+          <div id="dropzone" class="dropzone" tabindex="0"
+               aria-label="Bild hierher ziehen oder klicken, um Datei auszuwählen">
+            <input id="image" name="image" type="file" accept="image/*" hidden />
+            <button type="button" id="clear-image" class="clear-btn" title="Bild entfernen" aria-label="Bild entfernen">
+              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M18.3 5.71L12 12l6.3 6.29-1.41 1.41L10.59 13.41 4.29 19.7 2.88 18.29 9.17 12 2.88 5.71 4.29 4.3 10.59 10.59 16.89 4.3z" fill="currentColor"/>
+              </svg>
+            </button>
 
-    <div class="dropzone-inner">
-      <svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M19 13v6H5v-6H3v8h18v-8h-2zM11 7.83L8.41 10.41 7 9l5-5 5 5-1.41 1.41L13 7.83V16h-2V7.83z" fill="currentColor"/>
-      </svg>
-      <span>Bild ablegen oder klicken</span>
-    </div>
+            <div class="dropzone-inner">
+              <svg width="28" height="28" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M19 13v6H5v-6H3v8h18v-8h-2zM11 7.83L8.41 10.41 7 9l5-5 5 5-1.41 1.41L13 7.83V16h-2V7.83z" fill="currentColor"/>
+              </svg>
+              <span>Bild ablegen oder klicken</span>
+            </div>
 
-    <img id="preview" class="preview" alt="Vorschau" hidden />
-  </div>
-</div>
+            <img id="preview" class="preview" alt="Vorschau" hidden />
+          </div>
+        </div>
+
         <div class="grid">
           <div class="form-group">
             <label for="model">Style / Checkpoint</label>
@@ -122,12 +137,6 @@
       </div>
     </section>
   </main>
-
-  <footer class="site-footer">
-    <small>Hinweis: Die App erwartet eine laufende Stable-Diffusion API unter <code>SD_API_URL</code>.</small>
-  </footer>
-
-<script src="{{ url_for('static', filename='app.js') }}" defer></script>
-
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
 </body>
 </html>

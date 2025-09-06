@@ -1,4 +1,3 @@
-
 (() => {
   const $  = (sel, ctx=document) => ctx.querySelector(sel);
   const $$ = (sel, ctx=document) => Array.from(ctx.querySelectorAll(sel));
@@ -22,13 +21,17 @@
   const samplerSelect = byId('sampler');
 
   const typeRadios    = $$("input[type='radio'][value='txt2img'], input[type='radio'][value='img2img']");
-  const typeSelect    = byId('generation-type'); // optional
+  const typeSelect    = byId('generation-type'); // falls vorhanden
 
   const img2imgWrap   = byId('img2img-wrap') || byId('image-input');
   const dropzone      = byId('dropzone');
   const imageInput    = byId('image') || byId('input-image');
   const preview       = byId('preview');
   const clearBtn      = byId('clear-image');
+
+  const sdUrlInput    = byId('sd-api-url');
+  const sdSaveBtn     = byId('sd-save');
+  const sdHidden      = byId('sd-api-url-hidden');
 
   let lastPreviewURL = null;
 
@@ -92,7 +95,7 @@
 
   if (typeRadios.length) typeRadios.forEach(r => r.addEventListener('change', applyModeClass));
   if (typeSelect) typeSelect.addEventListener('change', applyModeClass);
-  applyModeClass(); // initial
+  applyModeClass();
 
   const fileToPreview = (file) => {
     if (!file || !preview || !dropzone) return;
@@ -144,6 +147,28 @@
     });
   }
 
+  (() => {
+    const serverVal  = (sdHidden?.value || '').trim();
+    const storedVal  = (localStorage.getItem('sdApiUrl') || '').trim();
+    const effective  = serverVal || storedVal;
+
+    if (effective) {
+      if (sdUrlInput) sdUrlInput.value = effective;
+      if (sdHidden)   sdHidden.value   = effective;
+    }
+
+    sdSaveBtn?.addEventListener('click', () => {
+      const url = (sdUrlInput?.value || '').trim().replace(/\/+$/, '');
+      if (!url) return;
+      localStorage.setItem('sdApiUrl', url);
+      if (sdHidden) sdHidden.value = url;
+
+      const qp = new URLSearchParams(window.location.search);
+      qp.set('sd_api_url', url);
+      window.location.search = qp.toString();
+    });
+  })();
+
   if (form) {
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -170,6 +195,9 @@
       fd.set('height', String(h));
       if (steps) fd.set('steps', steps.value);
 
+      const sdUrlVal = ((sdHidden?.value || sdUrlInput?.value) || '').trim();
+      if (sdUrlVal) fd.set('sd_api_url', sdUrlVal);
+
       if (imgMode && imageInput && imageInput.files[0]) {
         const file = imageInput.files[0];
         fd.set('image', file);
@@ -180,16 +208,15 @@
       const url = imgMode ? '/generate_img2img' : '/generate_txt2img';
 
       toggleLoading(true);
-    try {
+      try {
         const resp = await fetch(url, { method: 'POST', body: fd });
-
 
         const raw = await resp.text();
         let data = {};
         try { data = JSON.parse(raw); } catch {}
 
         if (!resp.ok) {
-            throw new Error(data?.error || `HTTP ${resp.status}`);
+          throw new Error(data?.error || `HTTP ${resp.status}`);
         }
 
         const mime = data?.mime || 'image/png';
@@ -199,40 +226,37 @@
         let imageUrl = null;
 
         if (serverUrl) {
-
-        imageUrl = serverUrl;
+          imageUrl = serverUrl;
         } else if (b64) {
+          const byteStr = atob(b64);
+          const len = byteStr.length;
+          const bytes = new Uint8Array(len);
+          for (let i = 0; i < len; i++) bytes[i] = byteStr.charCodeAt(i);
+          const blob = new Blob([bytes], { type: mime });
 
-        const byteStr = atob(b64);
-        const len = byteStr.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) bytes[i] = byteStr.charCodeAt(i);
-        const blob = new Blob([bytes], { type: mime });
-
-        if (window.__lastObjectUrl) URL.revokeObjectURL(window.__lastObjectUrl);
-        imageUrl = URL.createObjectURL(blob);
-        window.__lastObjectUrl = imageUrl;
+          if (window.__lastObjectUrl) URL.revokeObjectURL(window.__lastObjectUrl);
+          imageUrl = URL.createObjectURL(blob);
+          window.__lastObjectUrl = imageUrl;
         }
 
-  if (!imageUrl) {
-    throw new Error('Unbekanntes Antwortformat (image_url oder image_base64 fehlt).');
-  }
+        if (!imageUrl) {
+          throw new Error('Unbekanntes Antwortformat (image_url oder image_base64 fehlt).');
+        }
 
-  if (resultImg)    resultImg.src = imageUrl;
-  if (downloadLink) {
-    downloadLink.href = imageUrl;
-    const ext = (mime.split('/')[1] || 'png').toLowerCase();
-    downloadLink.download = `generated.${ext}`;
-  }
-  if (resultCard)   resultCard.hidden = false;
+        if (resultImg)    resultImg.src = imageUrl;
+        if (downloadLink) {
+          downloadLink.href = imageUrl;
+          const ext = (mime.split('/')[1] || 'png').toLowerCase();
+          downloadLink.download = `generated.${ext}`;
+        }
+        if (resultCard)   resultCard.hidden = false;
 
-} catch (err) {
-  console.error(err);
-  setError(`Fehler bei der Generierung: ${err.message || err}`);
-} finally {
-  toggleLoading(false);
-}
-
+      } catch (err) {
+        console.error(err);
+        setError(`Fehler bei der Generierung: ${err.message || err}`);
+      } finally {
+        toggleLoading(false);
+      }
     });
   }
 })();

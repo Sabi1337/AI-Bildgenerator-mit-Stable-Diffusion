@@ -8,9 +8,16 @@ from PIL import Image
 import requests
 from werkzeug.exceptions import HTTPException
 
-API_URL = os.getenv("SD_API_URL", "http://127.0.0.1:7860")
+API_URL = os.getenv("SD_API_URL", "http://127.0.0.1:7860").rstrip("/")
 
 app = Flask(__name__, static_folder="static", static_url_path="/static")
+
+def _sd_url_from_request():
+    url = (request.form.get("sd_api_url")
+           or request.args.get("sd_api_url")
+           or API_URL)
+    return url.rstrip("/")
+
 
 def http_get_json(url: str, timeout=8):
     try:
@@ -21,7 +28,6 @@ def http_get_json(url: str, timeout=8):
         print(f"[HTTP GET] {url} -> {e}")
         return None
 
-
 def http_post_json(url: str, payload: dict, timeout=120):
     try:
         r = requests.post(url, json=payload, timeout=timeout)
@@ -30,9 +36,8 @@ def http_post_json(url: str, payload: dict, timeout=120):
         print(f"[HTTP POST] {url} -> {e}")
         return None
 
-
-def get_available_samplers():
-    data = http_get_json(f"{API_URL}/sdapi/v1/samplers")
+def get_available_samplers(base_url: str):
+    data = http_get_json(f"{base_url}/sdapi/v1/samplers")
     if not data:
         return []
     try:
@@ -40,16 +45,14 @@ def get_available_samplers():
     except Exception:
         return []
 
-
-def get_available_models():
-    data = http_get_json(f"{API_URL}/sdapi/v1/sd-models")
+def get_available_models(base_url: str):
+    data = http_get_json(f"{base_url}/sdapi/v1/sd-models")
     if not data:
         return []
     try:
         return [m["model_name"] for m in data if "model_name" in m]
     except Exception:
         return []
-
 
 def strip_data_url_prefix(b64str: str) -> str:
     if isinstance(b64str, str) and b64str.startswith("data:image"):
@@ -62,7 +65,6 @@ def pil_to_png_bytes(img: Image.Image) -> bytes:
     img.save(buf, format="PNG")
     return buf.getvalue()
 
-
 def get_uploaded_image_file():
     for key in ("image", "input-image", "input_image"):
         f = request.files.get(key)
@@ -72,21 +74,25 @@ def get_uploaded_image_file():
 
 @app.route("/")
 def index():
-    models = get_available_models()
-    samplers = get_available_samplers()
-    return render_template("index.html", styles=models, samplers=samplers)
+    base = _sd_url_from_request()
+    models = get_available_models(base)
+    samplers = get_available_samplers(base)
+    return render_template("index.html",
+                           styles=models, samplers=samplers,
+                           sd_api_url=base)
 
 
 @app.route("/generate_txt2img", methods=["POST"])
 def generate_txt2img():
     try:
+        sd_url = _sd_url_from_request()
         prompt = request.form.get("prompt", "")
         negative_prompt = request.form.get("negative-prompt", "")
 
-        models = get_available_models()
+        models = get_available_models(sd_url)
         model = request.form.get("model") or (models[0] if models else "")
 
-        samplers = get_available_samplers()
+        samplers = get_available_samplers(sd_url)
         sampler = request.form.get("sampler") or (samplers[0] if samplers else "Euler")
 
         # Fallbacks/Validierung
@@ -111,10 +117,9 @@ def generate_txt2img():
             "sd_model_checkpoint": model
         }
 
-        resp = http_post_json(f"{API_URL}/sdapi/v1/txt2img", payload)
+        resp = http_post_json(f"{sd_url}/sdapi/v1/txt2img", payload)
         if not resp:
             return jsonify({"error": "Keine Verbindung zur Stable-Diffusion API."}), 502
-
         if resp.status_code != 200:
             return jsonify({"error": f"API error: {resp.status_code}, {resp.text}"}), 500
 
@@ -146,10 +151,11 @@ def generate_txt2img():
 @app.route("/generate_img2img", methods=["POST"])
 def generate_img2img():
     try:
+        sd_url = _sd_url_from_request()
         prompt = request.form.get("prompt", "")
         negative_prompt = request.form.get("negative-prompt", "")
 
-        models = get_available_models()
+        models = get_available_models(sd_url)
         model = request.form.get("model") or (models[0] if models else "")
 
         sampler = request.form.get("sampler", "Euler")
@@ -185,10 +191,9 @@ def generate_img2img():
             "sd_model_checkpoint": model,
         }
 
-        resp = http_post_json(f"{API_URL}/sdapi/v1/img2img", payload)
+        resp = http_post_json(f"{sd_url}/sdapi/v1/img2img", payload)
         if not resp:
             return jsonify({"error": "Keine Verbindung zur Stable-Diffusion API."}), 502
-
         if resp.status_code != 200:
             return jsonify({"error": f"API error: {resp.status_code}, {resp.text}"}), 500
 
@@ -216,20 +221,24 @@ def generate_img2img():
         print(f"[generate_img2img] {e}")
         return jsonify({"error": str(e)}), 500
 
+
 @app.route("/health")
 def health():
     try:
-        r = requests.get(f"{API_URL}/sdapi/v1/samplers", timeout=3)
+        base = _sd_url_from_request()
+        r = requests.get(f"{base}/sdapi/v1/samplers", timeout=3)
         ok = r.status_code == 200
         return jsonify({"ok": ok}), (200 if ok else 502)
     except Exception:
         return jsonify({"ok": False}), 502
+
 
 @app.errorhandler(Exception)
 def handle_exc(e):
     if isinstance(e, HTTPException):
         return jsonify({"error": e.description}), e.code
     return jsonify({"error": "Unerwarteter Fehler"}), 500
+
 
 def open_browser():
     try:

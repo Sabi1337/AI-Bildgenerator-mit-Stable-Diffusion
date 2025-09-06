@@ -2,7 +2,6 @@ import base64
 from app import app
 
 def test_txt2img_ok(monkeypatch):
-    # Minimaler Fake-Response von SD: Base64-String (kann ruhig minimal sein)
     fake_b64 = base64.b64encode(b"\x89PNG\r\n\x1a\nfake").decode()
 
     class FakeResp:
