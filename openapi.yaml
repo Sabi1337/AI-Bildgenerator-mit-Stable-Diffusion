@@ -2,47 +2,190 @@ openapi: 3.0.3
 info:
   title: Picture Generator API
   version: "1.0.0"
+  description: >
+    Thin client für AUTOMATIC1111 Stable Diffusion WebUI.
+    Txt2Img & Img2Img via Flask → SD-API. Stateless: Bild kommt als Base64 im JSON zurück.
 servers:
   - url: http://localhost:5000
+tags:
+  - name: generation
+    description: Bildgenerierung
+  - name: system
+    description: Health & Meta
+
 paths:
   /:
     get:
-      summary: UI index
-      responses: { '200': { description: HTML page } }
+      tags: [system]
+      summary: UI-Index (HTML)
+      responses:
+        "200":
+          description: HTML-Seite
+          content:
+            text/html:
+              schema:
+                type: string
+
   /generate_txt2img:
     post:
-      summary: Generate an image from text prompt
-      requestBody:
-        required: true
-        content:
-          application/x-www-form-urlencoded:
-            schema:
-              type: object
-              properties:
-                prompt: { type: string }
-                "negative-prompt": { type: string }
-                model: { type: string }
-                width: { type: integer, default: 512 }
-                height: { type: integer, default: 512 }
-                steps: { type: integer, default: 30 }
-                sampler: { type: string, default: Euler }
-      responses: { '200': { description: OK } }
-  /generate_img2img:
-    post:
-      summary: Generate from input image + prompt
+      tags: [generation]
+      summary: Text → Bild erzeugen
       requestBody:
         required: true
         content:
           multipart/form-data:
             schema:
               type: object
+              required: [prompt, width, height, steps]
               properties:
-                image: { type: string, format: binary }
-                prompt: { type: string }
-                "negative-prompt": { type: string }
-                model: { type: string }
-                width: { type: integer, default: 512 }
-                height: { type: integer, default: 512 }
-                steps: { type: integer, default: 50 }
-                sampler: { type: string, default: Euler }
-      responses: { '200': { description: OK } }
+                prompt:
+                  type: string
+                  example: "a cat astronaut, cinematic lighting"
+                negative-prompt:
+                  type: string
+                  example: "blurry, lowres, artifacts"
+                model:
+                  type: string
+                  description: SD-Checkpoint-Name (wie /sdapi/v1/sd-models)
+                  example: "v1-5-pruned-emaonly.safetensors"
+                sampler:
+                  type: string
+                  description: Sampler (wie /sdapi/v1/samplers)
+                  example: "Euler"
+                width:
+                  type: integer
+                  minimum: 64
+                  maximum: 2048
+                  multipleOf: 64
+                  example: 512
+                height:
+                  type: integer
+                  minimum: 64
+                  maximum: 2048
+                  multipleOf: 64
+                  example: 512
+                steps:
+                  type: integer
+                  minimum: 1
+                  maximum: 200
+                  example: 20
+      responses:
+        "200":
+          description: Erfolgreich generiert
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImageResponse"
+        "400":
+          description: Ungültige Anfrage (z. B. Validierung)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "500":
+          description: Interner Fehler / SD-Backend down
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /generate_img2img:
+    post:
+      tags: [generation]
+      summary: Bild → Bild transformieren
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image, prompt, width, height, steps]
+              properties:
+                image:
+                  type: string
+                  format: binary
+                  description: Eingangsbild (PNG/JPG/WEBP)
+                prompt:
+                  type: string
+                  example: "make it photorealistic, 50mm lens"
+                negative-prompt:
+                  type: string
+                  example: "blurry, lowres"
+                model:
+                  type: string
+                  example: "v1-5-pruned-emaonly.safetensors"
+                sampler:
+                  type: string
+                  example: "Euler"
+                width:
+                  type: integer
+                  minimum: 64
+                  maximum: 2048
+                  multipleOf: 64
+                  example: 512
+                height:
+                  type: integer
+                  minimum: 64
+                  maximum: 2048
+                  multipleOf: 64
+                  example: 512
+                steps:
+                  type: integer
+                  minimum: 1
+                  maximum: 200
+                  example: 20
+      responses:
+        "200":
+          description: Erfolgreich generiert
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImageResponse"
+        "400":
+          description: Ungültige Anfrage (z. B. kein Bild)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "500":
+          description: Interner Fehler / SD-Backend down
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /health:
+    get:
+      tags: [system]
+      summary: Health-Check
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                example:
+                  ok: true
+
+components:
+  schemas:
+    ImageResponse:
+      type: object
+      required: [image_base64, mime]
+      properties:
+        message:
+          type: string
+          example: "Erfolgreich!"
+        image_base64:
+          type: string
+          description: Bild als Base64 (PNG/JPEG/WEBP)
+        mime:
+          type: string
+          enum: [image/png, image/jpeg, image/webp]
+          example: image/png
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Kein Bild (Feld: image) gefunden."
